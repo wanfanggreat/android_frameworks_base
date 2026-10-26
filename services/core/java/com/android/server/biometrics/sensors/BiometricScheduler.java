@@ -191,16 +191,20 @@ public class BiometricScheduler<T, U> {
         @Override
         public void onClientFinished(@NonNull BaseClientMonitor clientMonitor, boolean success) {
             mHandler.post(() -> {
-                if (mCurrentOperation == null) {
+                // mCurrentOperation can be cleared from the client callback thread
+                // while this handler runs.  Snapshot it so a dying fingerprint HAL
+                // cannot turn the teardown into a system_server NPE.
+                final BiometricSchedulerOperation operation = mCurrentOperation;
+                if (operation == null) {
                     Slog.e(TAG, "[Finishing] " + clientMonitor
                             + " but current operation is null, success: " + success
                             + ", possible lifecycle bug in clientMonitor implementation?");
                     return;
                 }
 
-                if (!mCurrentOperation.isFor(clientMonitor)) {
+                if (!operation.isFor(clientMonitor)) {
                     Slog.e(TAG, "[Ignoring Finish] " + clientMonitor + " does not match"
-                            + " current: " + mCurrentOperation);
+                            + " current: " + operation);
                     return;
                 }
 
@@ -208,13 +212,13 @@ public class BiometricScheduler<T, U> {
 
                 if (mGestureAvailabilityDispatcher != null) {
                     mGestureAvailabilityDispatcher.markSensorActive(
-                            mCurrentOperation.getSensorId(), false /* active */);
+                            operation.getSensorId(), false /* active */);
                 }
 
                 if (mRecentOperations.size() >= mRecentOperationsLimit) {
                     mRecentOperations.remove(0);
                 }
-                mRecentOperations.add(mCurrentOperation.getProtoEnum());
+                mRecentOperations.add(operation.getProtoEnum());
                 mCurrentOperation = null;
                 mTotalOperationsHandled++;
                 checkCurrentUserAndStartNextOperation();

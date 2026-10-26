@@ -213,12 +213,24 @@ public class HidlToAidlSessionAdapter implements ISession {
         return mSession.get();
     }
 
+    // The vendor GoodIX HIDL HAL can die inside setActiveGroup().  The caller
+    // checks getIBiometricsFingerprint() first, but mSession can become null
+    // before these calls; keep that failure a RemoteException so it does not
+    // abort system_server with a NullPointerException.
+    private IBiometricsFingerprint getSessionOrThrow() throws RemoteException {
+        final IBiometricsFingerprint session = mSession.get();
+        if (session == null) {
+            throw new RemoteException("Fingerprint HAL unavailable");
+        }
+        return session;
+    }
+
     public long getAuthenticatorIdForUpdateClient() throws RemoteException {
-        return mSession.get().getAuthenticatorId();
+        return getSessionOrThrow().getAuthenticatorId();
     }
 
     public void setActiveGroup(int userId, String absolutePath) throws RemoteException {
-        mSession.get().setActiveGroup(userId, absolutePath);
+        getSessionOrThrow().setActiveGroup(userId, absolutePath);
     }
 
     private void setCallback(AidlResponseHandler aidlResponseHandler) {
