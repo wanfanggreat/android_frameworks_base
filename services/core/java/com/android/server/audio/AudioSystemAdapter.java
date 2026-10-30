@@ -768,8 +768,14 @@ public class AudioSystemAdapter implements AudioSystem.RoutingUpdateCallback,
         if (filterInternal) {
             synchronized (sAudioProductStrategiesLock) {
                 if (sAudioProductStrategiesWithoutInternal == null) {
-                    sAudioProductStrategiesWithoutInternal = AudioProductStrategy
+                    final List<AudioProductStrategy> strategies = AudioProductStrategy
                             .filterNonInternalStrategies(getAllProductStrategies());
+                    if (strategies.isEmpty()) {
+                        // audioserver may not be ready at boot; returning without caching lets
+                        // the caller retry the native query instead of staying empty forever.
+                        return strategies;
+                    }
+                    sAudioProductStrategiesWithoutInternal = strategies;
                 }
             }
             return sAudioProductStrategiesWithoutInternal;
@@ -790,6 +796,10 @@ public class AudioSystemAdapter implements AudioSystem.RoutingUpdateCallback,
                 if (status != AudioSystem.SUCCESS) {
                     Log.e(TAG, "Error while getting audio product strategies "
                             + AudioSystem.audioSystemErrorToString(status));
+                    return Collections.emptyList();
+                }
+                if (strategies.isEmpty()) {
+                    Log.w(TAG, "No audio product strategies reported, not caching the result");
                     return Collections.emptyList();
                 }
                 sAudioProductStrategies = Collections.unmodifiableList(strategies);
